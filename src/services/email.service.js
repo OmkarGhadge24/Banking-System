@@ -273,4 +273,184 @@ Banking System Team
     return await sendEmail(userEmail, subject, text, html);
 };
 
-module.exports = { sendEmail, sendRegistrationEmail };
+const sendTransactionEmail = async (userEmail, name, amount, creditAccount, recipientName) => {
+    const currency = creditAccount.currency || "INR";
+
+    const formattedAmount = new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 2,
+    }).format(Number(amount));
+
+    const subject = "Transaction Successful - Banking System";
+
+    const text = `Hello ${name || "there"},
+
+Your money transfer has been completed successfully.
+
+Amount Transferred: ${formattedAmount}
+Transferred To: ${recipientName}
+
+This email is for your transaction records.
+
+Best regards,
+Banking System Team
+    `.trim();
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>Transaction Successful</title>
+</head>
+
+<body style="
+    margin:0;
+    padding:20px 10px;
+    background-color:#f1f5f9;
+    font-family:Arial,Helvetica,sans-serif;
+    color:#243447;
+">
+
+<table role="presentation" width="100%"
+       cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        <td align="center">
+
+            <table role="presentation" width="100%"
+                   cellpadding="0" cellspacing="0" border="0"
+                   style="
+                       max-width:500px;
+                       background:#ffffff;
+                       border-radius:10px;
+                       overflow:hidden;
+                   ">
+
+                <tr>
+                    <td align="center"
+                        style="background:#102a43;padding:22px 15px;">
+
+                        <img src="cid:banking-logo"
+                             alt="Banking System Logo"
+                             width="48"
+                             style="display:block;margin:0 auto 10px;border:0;height:auto;">
+
+                        <h2 style="color:#ffffff;font-size:22px;margin:0;">
+                            Banking System
+                        </h2>
+
+                        <p style="color:#cbd5e1;font-size:10px;
+                                  letter-spacing:1.5px;margin:8px 0 0;">
+                            YOUR MONEY. YOUR CONTROL.
+                        </p>
+
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:25px 22px;">
+
+                        <h2 style="color:#16803d;font-size:21px;
+                                   margin:0 0 18px;">
+                            &#10003; Transaction Successful
+                        </h2>
+
+                        <p style="color:#334155;font-size:14px;
+                                  margin:0 0 12px;">
+                            Hello ${name || "there"}!
+                        </p>
+
+                        <p style="color:#526171;font-size:14px;
+                                  line-height:1.7;margin:0 0 20px;">
+                            Your money transfer has been completed
+                            successfully.
+                        </p>
+
+                        <table role="presentation" width="100%"
+                               cellpadding="0" cellspacing="0" border="0"
+                               style="background:#f8fafc;
+                                      border:1px solid #e5e7eb;
+                                      border-radius:8px;">
+
+                            <tr>
+                                <td style="padding:18px;">
+
+                                    <p style="color:#64748b;font-size:12px;
+                                              margin:0 0 8px;">
+                                        Amount Transferred
+                                    </p>
+
+                                    <h1 style="color:#102a43;font-size:27px;
+                                               margin:0 0 18px;">
+                                        ${formattedAmount}
+                                    </h1>
+
+                                    <div style="border-top:1px solid #e5e7eb;
+                                                margin-bottom:15px;"></div>
+
+                                    <p style="color:#64748b;font-size:12px;
+                                              margin:0 0 7px;">
+                                        Transferred To
+                                    </p>
+
+                                    <p style="color:#102a43;font-size:15px;
+                                              font-weight:bold;margin:0;
+                                              overflow-wrap:anywhere;">
+                                        ${recipientName}
+                                    </p>
+
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="color:#526171;font-size:12px;
+                                  line-height:1.7;margin:20px 0;">
+                            This email is for your transaction records.
+                        </p>
+
+                        <p style="color:#334155;font-size:13px;
+                                  line-height:1.8;margin:0;">
+                            Best regards,<br>
+                            <strong style="color:#102a43;">
+                                Banking System Team
+                            </strong>
+                        </p>
+
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center"
+                        style="background:#f8fafc;
+                               border-top:1px solid #e5e7eb;padding:14px;">
+
+                        <p style="color:#94a3b8;font-size:11px;margin:0;">
+                            &copy; ${new Date().getFullYear()}
+                            Banking System
+                        </p>
+
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
+    `;
+
+    return await sendEmail(
+        userEmail,
+        subject,
+        text,
+        html
+    );
+};
+
+module.exports = { sendEmail, sendRegistrationEmail, sendTransactionEmail };

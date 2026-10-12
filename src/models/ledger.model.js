@@ -1,6 +1,6 @@
-const mongooose = require('mongoose');
+const mongoose = require('mongoose');
 
-const ledgerSchema = new mongooose.Schema({
+const ledgerSchema = new mongoose.Schema({
     account: {
         type: mongoose.Schema.ObjectId,
         ref: "account",
@@ -9,7 +9,7 @@ const ledgerSchema = new mongooose.Schema({
         immutable: true,
     },
     amount: {
-        type: String,
+        type: Number,
         required: [true, "Amount is required for creating ledger entry"],
         immutable: true,
     },
