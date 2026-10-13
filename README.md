@@ -1,43 +1,47 @@
-# Banking System
+# Banking System Backend
 
-A secure backend banking application built with Node.js, Express, and MongoDB. This project provides user authentication, account management, ledger-based balance tracking, and internal money transfers with transaction safety checks and email notifications.
+This project is a backend banking application built with Node.js, Express, and MongoDB. It provides user authentication, account creation, balance tracking, ledger-based financial history, and email notifications for a secure banking flow.
 
-It is designed as an API-first banking system and focuses on core banking operations rather than a frontend interface.
+The project is API-first and does not include a frontend dashboard. It exposes REST endpoints that can be consumed by a web or mobile client.
 
 ## Overview
 
-The Banking System allows users to:
+The banking system allows users to:
 
 - Register and log in securely
 - Create one or more bank accounts
-- View their account list
-- Check account balances from ledger activity
-- Transfer money between active accounts
-- Maintain ledger integrity using immutable debit/credit entries
+- View their accounts
+- Check account balances using ledger data
+- Transfer funds between active accounts
+- Maintain immutable debit and credit records
 - Receive registration and transaction emails
-- Use a system-user flow for initial funding operations
+- Use a system-user flow for internal funding operations
 
-The application uses MongoDB with Mongoose to model users, accounts, transactions, and ledger entries, and JWT for protected API access.
+It uses MongoDB with Mongoose for data modeling and JWT for protected API access.
 
 ## Tech Stack
 
 - Node.js
 - Express.js
 - MongoDB + Mongoose
-- JWT Authentication
-- bcryptjs for password hashing
-- Nodemailer for email services
-- dotenv for environment configuration
+- JWT authentication
+- bcryptjs
+- cookie-parser
+- Nodemailer
+- dotenv
 
 ## Project Structure
 
 ```text
-banking-system/
+Banking System/
 ├── public/
 │   └── logo.png
+├── scripts/
+│   └── provision-system-user.js
 ├── src/
 │   ├── app.js
 │   ├── config/
+│   │   ├── auth.config.js
 │   │   └── db.js
 │   ├── controllers/
 │   │   ├── account.controller.js
@@ -59,42 +63,71 @@ banking-system/
 │       └── email.service.js
 ├── .env
 ├── .gitignore
+├── package-lock.json
 ├── package.json
+├── README.md
 ├── server.js
-└── README.md
+└── public/
 ```
+
+## Core Modules
+
+### Authentication
+- `src/controllers/auth.controller.js` handles register, login, and logout
+- `src/middlewares/auth.middleware.js` verifies JWTs and restricts routes based on user type
+- `src/config/auth.config.js` contains token creation, verification, and cookie parsing logic
+- `src/models/blackList.model.js` stores revoked tokens used after logout
+
+### Account management
+- `src/models/account.model.js` defines the account model
+- `src/controllers/account.controller.js` creates accounts and fetches account details
+- Account status can be `ACTIVE`, `FROZEN`, or `CLOSED`
+- Balance is derived from ledger records instead of a stored mutable balance field
+
+### Transaction and ledger processing
+- `src/models/transaction.model.js` stores transaction metadata and idempotency keys
+- `src/models/ledger.model.js` stores immutable debit and credit entries
+- `src/controllers/transaction.controller.js` handles transfers and funding operations
+
+### Email service
+- `src/services/email.service.js` sends registration and transfer confirmation emails using Gmail OAuth2 credentials
+
+### System user setup
+- `scripts/provision-system-user.js` creates the system user and default account used for internal funding tasks
 
 ## Features
 
-### Authentication and security
+### User authentication and security
+- Email/password registration with validation
+- Password hashing via `bcryptjs`
+- JWT-based authentication
+- Cookie support for token handling
+- Logout support using token blacklisting
+- Route restrictions for privileged system-user access
 
-- User registration with email validation
-- Password hashing using bcryptjs
-- JWT-based auth with cookie support
-- Logout token blacklisting to invalidate old tokens
-- System-user middleware for restricted administrative funding endpoints
+### Account features
+- Create multiple accounts per user
+- Account ownership checks
+- Account status validation
+- Balance computed from ledger totals
 
-### Account management
+### Transaction features
+- Transfer between active accounts
+- Prevent same-account transfers
+- Amount validation and positivity checks
+- Idempotency keys to reduce duplicate processing
+- Ledger-based debit and credit entries
+- MongoDB transaction session support
+- Transaction lifecycle values: `PENDING`, `SUCCESS`, `FAILED`, `REVERSED`
 
-- User-specific account creation
-- Account status tracking: ACTIVE, FROZEN, CLOSED
-- Balance computation based on ledger records
-- Account ownership checks for secure access
-
-### Transaction processing
-
-- Funds transfer between accounts with validation
-- Insufficient-balance checks before transfer
-- Idempotency key enforcement to prevent duplicate transactions
-- Transaction lifecycle states: PENDING, SUCCESS, FAILED, REVERSED
-- Ledger entries for debit and credit operations
-- MongoDB transaction session for atomic transfer updates
+### System funding flow
+- Internal route to credit a customer account
+- Restricted to a valid system-user account
+- Used for operational or startup funding
 
 ### Email notifications
-
 - Welcome email after registration
-- Successful transaction email with transfer details
-- Gmail OAuth-based mail configuration
+- Transaction email after successful transfer
 
 ## API Endpoints
 
@@ -105,36 +138,50 @@ All routes are prefixed with `/api`.
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | POST | `/api/auth/register` | Register a new user |
-| POST | `/api/auth/login` | Log in an existing user |
-| POST | `/api/auth/logout` | Log out and blacklist the current token |
+| POST | `/api/auth/login` | Log in with email and password |
+| POST | `/api/auth/logout` | Log out the current user and revoke the token |
 
 ### Accounts
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| POST | `/api/accounts/` | Create a new account for the logged-in user |
-| GET | `/api/accounts/` | Fetch all accounts for the logged-in user |
-| GET | `/api/accounts/balance/:accountId` | Check balance for a specific account |
+| POST | `/api/accounts/` | Create an account for the logged-in user |
+| GET | `/api/accounts/` | Get all accounts of the logged-in user |
+| GET | `/api/accounts/balance/:accountId` | Get the balance of a specific account |
 
 ### Transactions
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| POST | `/api/transactions/` | Transfer money between active accounts |
-| POST | `/api/transactions/system/initial` | Fund a user account via the system-user route |
+| POST | `/api/transactions/` | Transfer funds between customer accounts |
+| POST | `/api/transactions/system/initial` | Credit a customer account through the system-user flow |
 
 ## Environment Variables
 
-Create a `.env` file in the project root with values like:
+Create a `.env` file in the project root with the following keys:
 
 ```env
-MONGO_URI=your_mongodb_url
-JWT_SECRET=your_super_secure_secret_key
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_very_secure_secret
+NODE_ENV=development
 CLIENT_ID=your_google_client_id
 CLIENT_SECRET=your_google_client_secret
 REFRESH_TOKEN=your_gmail_oauth_refresh_token
 EMAIL_USER=your_email@gmail.com
+SYSTEM_USER_EMAIL=system_user_email@example.com
+SYSTEM_USER_NAME=Banking System
+SYSTEM_USER_PASSWORD=strong_system_user_password
 ```
+
+### Variable explanations
+- `MONGO_URI`: MongoDB connection string
+- `JWT_SECRET`: Secret used to sign and verify JWTs
+- `NODE_ENV`: Application environment (for example `development` or `production`)
+- `CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN`: Gmail OAuth credentials for outbound email
+- `EMAIL_USER`: Email address used to send automated mail
+- `SYSTEM_USER_EMAIL`: Internal privileged user email
+- `SYSTEM_USER_NAME`: Name for the internal system user
+- `SYSTEM_USER_PASSWORD`: Strong secret used for the internal system user account
 
 ## Installation
 
@@ -151,7 +198,7 @@ cd "Banking System"
 npm install
 ```
 
-3. Configure environment variables in `.env`.
+3. Create a `.env` file in the project root and add the required variables listed above.
 
 4. Start the server:
 
@@ -159,13 +206,13 @@ npm install
 npm start
 ```
 
-5. For development with auto-reload:
+5. Run the app in development mode with automatic restarts:
 
 ```bash
 npm run dev
 ```
 
-The app runs on port `3000` by default.
+The server runs on port `3000` by default.
 
 ## License
 
