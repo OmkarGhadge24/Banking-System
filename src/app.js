@@ -3,6 +3,10 @@ const cookieParser = require('cookie-parser');
 
 const app = express();
 
+app.get("/", (req, res) => {
+    res.send("Services are running")
+})
+
 /**
  * - Routes required
 */
