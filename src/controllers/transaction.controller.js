@@ -148,9 +148,9 @@ async function createTransaction(req, res) {
 async function createInitialSystemTransaction(req, res) {
     const { creditAccount, amount, idempotencyKey } = req.body;
 
-    if (!creditAccount || !amount || !idempotencyKey) {
+    if (!creditAccount || !Number.isFinite(amount) || amount <= 0 || !idempotencyKey) {
         return res.status(400).json({
-            Message: "Credit account, Amount and Idempotency key are required"
+            Message: "Credit account, a positive amount and Idempotency key are required"
         })
     }
 
@@ -158,6 +158,27 @@ async function createInitialSystemTransaction(req, res) {
     if (!creditUserAccountExist) {
         return res.status(400).json({
             Message: "Credit account are Invalid"
+        })
+    }
+
+    const isTransactionAlreadyExists = await transactionModel.findOne({
+        idempotencyKey
+    });
+
+    if (isTransactionAlreadyExists) {
+        if (isTransactionAlreadyExists.status === "SUCCESS") {
+            return res.status(200).json({
+                Message: "Transaction already completed",
+                Transaction: isTransactionAlreadyExists
+            })
+        }
+        if (isTransactionAlreadyExists.status === "PENDING") {
+            return res.status(200).json({
+                Message: "Transaction is still pending",
+            })
+        }
+        return res.status(500).json({
+            Message: `Transaction is ${isTransactionAlreadyExists.status.toLowerCase()}, please try again`,
         })
     }
 
@@ -182,13 +203,7 @@ async function createInitialSystemTransaction(req, res) {
         status: "PENDING"
     });
 
-    const debitLedgerEntry = await ledgerModel.create([{
-        account: debitUserAccount._id,
-        type: "DEBIT",
-        amount: amount,
-        transaction: transaction._id
-    }], { session });
-
+    // Initial system funding issues funds rather than spending a system-account balance.
     const creditLedgerEntry = await ledgerModel.create([{
         account: creditAccount,
         type: "CREDIT",

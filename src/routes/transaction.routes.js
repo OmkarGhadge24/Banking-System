@@ -12,7 +12,7 @@ router.post("/", authMiddleware.authMiddleware, transactionController.createTran
 
 /**
  * - POST /api/transactions/system/initial
- * - Inital amount to system account
+ * - Fund an account from the system
 */
 router.post("/system/initial", authMiddleware.systemUserMiddleware, transactionController.createInitialSystemTransaction)
 

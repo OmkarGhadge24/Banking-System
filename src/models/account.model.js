@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const ledgerModel = require("./ledger.model");
+const userModel = require("./user.model");
 
 const accountSchema = new mongoose.Schema({
     user: {
@@ -26,6 +27,11 @@ const accountSchema = new mongoose.Schema({
 accountSchema.index({ user: 1, status: 1 });
 
 accountSchema.methods.getBalance = async function (req, res) {
+    const accountOwner = await userModel.findById(this.user).select("+systemUser");
+
+    if (accountOwner && accountOwner.systemUser) {
+        return 0;
+    }
 
     const balanceData = await ledgerModel.aggregate([
         { $match: { account: this._id } },
