@@ -39,37 +39,67 @@ async function userRegisterController(req, res) {
 }
 
 /**
- * - User login controller
- * - POST /api/auth/login
-*/
+ * User login controller
+ * POST /api/auth/login
+ */
 async function userLoginController(req, res) {
-    const { email, password } = req.body
-    const user = await userModel.findOne({ email }).select("+password");
+    const { email, password } = req.body;
 
+    // Step 1: Validate the required input.
+    if (
+        typeof email !== "string" ||
+        typeof password !== "string" ||
+        !email.trim() ||
+        !password
+    ) {
+        return res.status(400).json({
+            Message: "Email and password are required"
+        });
+    }
+
+    // Step 2: Normalize the email address.
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Step 3: Find the user and explicitly retrieve the password hash.
+    const user = await userModel
+        .findOne({ email: normalizedEmail })
+        .select("+password");
+
+    // Step 4: Reject an email address that does not exist.
     if (!user) {
         return res.status(401).json({
             Message: "Email or password is invalid"
-        })
+        });
     }
 
-    const isValidPassword = user.comparePassword(password)
+    // Step 5: Wait for bcrypt to compare the passwords.
+    const isValidPassword = await user.comparePassword(password);
 
+    // Step 6: Reject an incorrect password.
     if (!isValidPassword) {
         return res.status(401).json({
             Message: "Email or password is invalid"
-        })
+        });
     }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "3d" })
+    // Step 7: Create a JWT only after successful verification.
+    const token = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: "3d" }
+    );
+
+    // Step 8: Preserve your existing response structure.
     res.cookie("token", token);
-    res.status(200).json({
+
+    return res.status(200).json({
         user: {
             _id: user._id,
             email: user.email,
             name: user.name
         },
         token
-    })
+    });
 }
 
 /**
