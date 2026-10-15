@@ -16,4 +16,15 @@ router.post("/", authMiddleware.authMiddleware, transactionController.createTran
 */
 router.post("/system/initial", authMiddleware.systemUserMiddleware, transactionController.createInitialSystemTransaction)
 
+
+/** 
+ * - Authenticated transaction history
+ */
+router.get("/history", authMiddleware.authMiddleware, transactionController.getTransactionHistory);
+
+/** 
+ * - Authenticated ledger entries
+ */
+router.get("/ledger", authMiddleware.authMiddleware, transactionController.getLedgerEntries);
+
 module.exports = router;

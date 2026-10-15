@@ -430,4 +430,61 @@ async function createInitialSystemTransaction(req, res) {
     });
 }
 
-module.exports = { createTransaction, createInitialSystemTransaction };
+async function getTransactionHistory(req, res) {
+    try {
+        const accounts = await accountModel
+            .find({ user: req.user._id })
+            .select("_id currency");
+
+        const accountIds = accounts.map((account) => account._id);
+
+        const transactions = await transactionModel
+            .find({
+                $or: [
+                    { debitAccount: { $in: accountIds } },
+                    { creditAccount: { $in: accountIds } }
+                ]
+            })
+            .populate("debitAccount", "_id currency status")
+            .populate("creditAccount", "_id currency status")
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean();
+
+        return res.status(200).json({ transactions });
+    } catch (error) {
+        console.error("Transaction history error:", error);
+
+        return res.status(500).json({
+            Message: "Unable to retrieve transaction history"
+        });
+    }
+}
+
+async function getLedgerEntries(req, res) {
+    try {
+        const accounts = await accountModel
+            .find({ user: req.user._id })
+            .select("_id currency");
+
+        const accountIds = accounts.map((account) => account._id);
+
+        const entries = await ledgerModel
+            .find({ account: { $in: accountIds } })
+            .populate("account", "_id currency status")
+            .populate("transaction", "status amount createdAt debitAccount creditAccount")
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean();
+
+        return res.status(200).json({ entries });
+    } catch (error) {
+        console.error("Ledger entries error:", error);
+
+        return res.status(500).json({
+            Message: "Unable to retrieve ledger entries"
+        });
+    }
+}
+
+module.exports = { createTransaction, createInitialSystemTransaction, getTransactionHistory, getLedgerEntries };
