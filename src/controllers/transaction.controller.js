@@ -4,6 +4,18 @@ const emailService = require("../services/email.service");
 const accountModel = require("../models/account.model");
 const mongoose = require("mongoose");
 
+function isTransactionUnsupportedError(error) {
+    const message = String(error?.message || "").toLowerCase();
+
+    return (
+        error?.code === 20 ||
+        message.includes("transaction numbers are only allowed") ||
+        message.includes("transactions are not supported") ||
+        message.includes("does not support transactions") ||
+        message.includes("replica set member or mongos")
+    );
+}
+
 /**
  * Create a new customer transaction.
  *
@@ -446,10 +458,24 @@ async function createInitialSystemTransaction(req, res) {
         await session.commitTransaction();
     } catch (error) {
         if (session.inTransaction()) {
-            await session.abortTransaction();
+            try {
+                await session.abortTransaction();
+            } catch (abortError) {
+                console.error(
+                    "Initial funding transaction rollback failed:",
+                    abortError
+                );
+            }
         }
 
         console.error("Initial funding transaction failed:", error);
+        if (isTransactionUnsupportedError(error)) {
+            return res.status(503).json({
+                Message:
+                    "MongoDB transactions are not supported by the configured database. Configure MongoDB as a replica set or use MongoDB Atlas, then restart the backend."
+            });
+        }
+
         return res.status(500).json({
             Message: "Unable to complete initial funding. No funds were moved."
         });
