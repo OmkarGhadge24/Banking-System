@@ -16,6 +16,30 @@ function isTransactionUnsupportedError(error) {
     );
 }
 
+function getFundingFailureCode(error) {
+    if (isTransactionUnsupportedError(error)) {
+        return "MONGODB_TRANSACTIONS_UNAVAILABLE";
+    }
+
+    if (error?.code === 11000) {
+        return "DUPLICATE_IDEMPOTENCY_KEY";
+    }
+
+    if (error?.name === "ValidationError") {
+        return "TRANSACTION_VALIDATION_FAILED";
+    }
+
+    if (typeof error?.code === "number") {
+        return `MONGODB_${error.code}`;
+    }
+
+    if (typeof error?.name === "string") {
+        return error.name.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+    }
+
+    return "UNKNOWN";
+}
+
 /**
  * Create a new customer transaction.
  *
@@ -471,13 +495,19 @@ async function createInitialSystemTransaction(req, res) {
         console.error("Initial funding transaction failed:", error);
         if (isTransactionUnsupportedError(error)) {
             return res.status(503).json({
+                Code: "MONGODB_TRANSACTIONS_UNAVAILABLE",
                 Message:
                     "MongoDB transactions are not supported by the configured database. Configure MongoDB as a replica set or use MongoDB Atlas, then restart the backend."
             });
         }
 
-        return res.status(500).json({
-            Message: "Unable to complete initial funding. No funds were moved."
+        const failureCode = getFundingFailureCode(error);
+        const statusCode = error?.code === 11000 ? 409 : 500;
+
+        return res.status(statusCode).json({
+            Code: failureCode,
+            Message:
+                `Unable to complete initial funding (${failureCode}). No funds were moved. Check the backend logs for the matching transaction error.`
         });
     } finally {
         await session.endSession();
