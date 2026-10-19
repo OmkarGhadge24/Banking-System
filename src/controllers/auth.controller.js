@@ -3,6 +3,17 @@ const jwt = require('jsonwebtoken')
 const emailService = require('../services/email.service');
 const tokenBlackListModel = require('../models/blackList.model');
 
+function getCurrentUserController(req, res) {
+    return res.status(200).json({
+        user: {
+            _id: req.user._id,
+            email: req.user.email,
+            name: req.user.name,
+            systemUser: req.user.systemUser === true
+        }
+    });
+}
+
 /**
  * - User register controller
  * - POST /api/auth/register
@@ -30,7 +41,8 @@ async function userRegisterController(req, res) {
         user: {
             _id: user._id,
             email: user.email,
-            name: user.name
+            name: user.name,
+            systemUser: false
         },
         token
     })
@@ -63,7 +75,7 @@ async function userLoginController(req, res) {
     // Step 3: Find the user and explicitly retrieve the password hash.
     const user = await userModel
         .findOne({ email: normalizedEmail })
-        .select("+password");
+        .select("+password +systemUser");
 
     // Step 4: Reject an email address that does not exist.
     if (!user) {
@@ -96,7 +108,8 @@ async function userLoginController(req, res) {
         user: {
             _id: user._id,
             email: user.email,
-            name: user.name
+            name: user.name,
+            systemUser: user.systemUser === true
         },
         token
     });
@@ -126,4 +139,9 @@ async function userLogoutController(req, res) {
     })
 }
 
-module.exports = { userRegisterController, userLoginController, userLogoutController }; 
+module.exports = {
+    userRegisterController,
+    userLoginController,
+    userLogoutController,
+    getCurrentUserController
+};

@@ -140,6 +140,7 @@ All routes are prefixed with `/api`.
 | POST | `/api/auth/register` | Register a new user |
 | POST | `/api/auth/login` | Log in with email and password |
 | POST | `/api/auth/logout` | Log out the current user and revoke the token |
+| GET | `/api/auth/me` | Return the currently authenticated user and role |
 
 ### Accounts
 
@@ -155,7 +156,10 @@ All routes are prefixed with `/api`.
 | --- | --- | --- |
 | POST | `/api/transactions/` | Transfer funds between customer accounts |
 | POST | `/api/transactions/system/initial` | Credit a customer account through the system-user flow |
+| GET | `/api/transactions/system/accounts` | List customer accounts for system-user funding |
+| GET | `/api/transactions/system/ledger` | List ledger entries for system-user funding transactions |
 
+Customer transfers can send to any active customer account by account ID, provided the sender owns the debit account and both accounts use the same currency. System-user funding records both debit and credit ledger entries and is restricted to the system-user role.
 ## Environment Variables
 
 Create a `.env` file in the project root with the following keys:

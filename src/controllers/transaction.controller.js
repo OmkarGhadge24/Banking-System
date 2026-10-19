@@ -97,7 +97,10 @@ async function createTransaction(req, res) {
         .findOne({
             _id: creditAccount
         })
-        .populate("user", "name");
+        .populate({
+            path: "user",
+            select: "name +systemUser"
+        });
 
     // 7. Reject nonexistent or inaccessible accounts.
     if (!debitUserAccount || !creditUserAccount) {
@@ -111,6 +114,12 @@ async function createTransaction(req, res) {
     if (!creditUserAccount.user) {
         return res.status(400).json({
             Message: "Credit account owner is invalid"
+        });
+    }
+
+    if (creditUserAccount.user.systemUser === true) {
+        return res.status(400).json({
+            Message: "Transfers to system-user accounts are not allowed"
         });
     }
 
@@ -193,59 +202,65 @@ async function createTransaction(req, res) {
      * reserved for their respective roadmap fixes.
      */
     const session = await mongoose.startSession();
-    session.startTransaction();
+    let transaction;
 
-    const transaction = new transactionModel({
-        debitAccount,
-        creditAccount,
-        amount,
-        idempotencyKey: normalizedIdempotencyKey,
-        status: "PENDING"
-    });
+    try {
+        session.startTransaction();
 
-    await transaction.save({ session });
+        transaction = new transactionModel({
+            debitAccount,
+            creditAccount,
+            amount,
+            idempotencyKey: normalizedIdempotencyKey,
+            status: "PENDING"
+        });
 
-    // Record the debit.
-    await ledgerModel.create(
-        [
-            {
-                account: debitAccount,
-                type: "DEBIT",
-                amount,
-                transaction: transaction._id
-            }
-        ],
-        { session }
-    );
+        await transaction.save({ session });
 
-    // Record the credit.
-    await ledgerModel.create(
-        [
-            {
-                account: creditAccount,
-                type: "CREDIT",
-                amount,
-                transaction: transaction._id
-            }
-        ],
-        { session }
-    );
+        await ledgerModel.create(
+            [
+                {
+                    account: debitAccount,
+                    type: "DEBIT",
+                    amount,
+                    transaction: transaction._id
+                },
+                {
+                    account: creditAccount,
+                    type: "CREDIT",
+                    amount,
+                    transaction: transaction._id
+                }
+            ],
+            { session }
+        );
 
-    // Mark the transaction successful within the session.
-    transaction.status = "SUCCESS";
-    await transaction.save({ session });
+        transaction.status = "SUCCESS";
+        await transaction.save({ session });
+        await session.commitTransaction();
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
 
-    await session.commitTransaction();
-    session.endSession();
+        console.error("Transfer transaction failed:", error);
+        return res.status(500).json({
+            Message: "Unable to complete the transfer. No funds were moved."
+        });
+    } finally {
+        await session.endSession();
+    }
 
-    // 13. Send the transaction email.
-    await emailService.sendTransactionEmail(
+    // Email delivery must not delay confirmation of a committed transfer.
+    emailService.sendTransactionEmail(
         req.user.email,
         req.user.name,
         amount,
         creditAccount,
         creditUserAccount.user.name
-    );
+    ).catch((error) => {
+        console.error("Transfer confirmation email failed:", error);
+    });
 
     return res.status(200).json({
         Message: "Transaction completed successfully",
@@ -393,35 +408,54 @@ async function createInitialSystemTransaction(req, res) {
      * Session lifecycle hardening is reserved for Fix 6.
      */
     const session = await mongoose.startSession();
-    session.startTransaction();
+    let transaction;
 
-    const transaction = new transactionModel({
-        debitAccount: debitUserAccount._id,
-        creditAccount: creditUserAccountExist._id,
-        amount,
-        idempotencyKey: normalizedIdempotencyKey,
-        status: "PENDING"
-    });
+    try {
+        session.startTransaction();
 
-    await transaction.save({ session });
+        transaction = new transactionModel({
+            debitAccount: debitUserAccount._id,
+            creditAccount: creditUserAccountExist._id,
+            amount,
+            idempotencyKey: normalizedIdempotencyKey,
+            status: "PENDING"
+        });
 
-    await ledgerModel.create(
-        [
-            {
-                account: creditUserAccountExist._id,
-                type: "CREDIT",
-                amount,
-                transaction: transaction._id
-            }
-        ],
-        { session }
-    );
+        await transaction.save({ session });
 
-    transaction.status = "SUCCESS";
-    await transaction.save({ session });
+        await ledgerModel.create(
+            [
+                {
+                    account: debitUserAccount._id,
+                    type: "DEBIT",
+                    amount,
+                    transaction: transaction._id
+                },
+                {
+                    account: creditUserAccountExist._id,
+                    type: "CREDIT",
+                    amount,
+                    transaction: transaction._id
+                }
+            ],
+            { session }
+        );
 
-    await session.commitTransaction();
-    session.endSession();
+        transaction.status = "SUCCESS";
+        await transaction.save({ session });
+        await session.commitTransaction();
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+
+        console.error("Initial funding transaction failed:", error);
+        return res.status(500).json({
+            Message: "Unable to complete initial funding. No funds were moved."
+        });
+    } finally {
+        await session.endSession();
+    }
 
     return res.status(200).json({
         Message:
@@ -487,4 +521,69 @@ async function getLedgerEntries(req, res) {
     }
 }
 
-module.exports = { createTransaction, createInitialSystemTransaction, getTransactionHistory, getLedgerEntries };
+async function getSystemCustomerAccounts(req, res) {
+    try {
+        const accounts = await accountModel
+            .find({ user: { $ne: req.user._id } })
+            .populate({
+                path: "user",
+                match: { systemUser: false },
+                select: "name"
+            })
+            .select("_id currency status user createdAt")
+            .sort({ createdAt: -1 })
+            .lean();
+
+        return res.status(200).json({
+            accounts: accounts.filter((account) => account.user)
+        });
+    } catch (error) {
+        console.error("System customer account lookup failed:", error);
+        return res.status(500).json({
+            Message: "Unable to retrieve customer accounts"
+        });
+    }
+}
+
+async function getSystemLedgerEntries(req, res) {
+    try {
+        const systemAccounts = await accountModel
+            .find({ user: req.user._id })
+            .select("_id");
+        const accountIds = systemAccounts.map((account) => account._id);
+        const transactions = await transactionModel
+            .find({ debitAccount: { $in: accountIds } })
+            .select("_id")
+            .lean();
+        const transactionIds = transactions.map(
+            (transaction) => transaction._id
+        );
+
+        const entries = await ledgerModel
+            .find({ transaction: { $in: transactionIds } })
+            .populate("account", "_id currency status")
+            .populate(
+                "transaction",
+                "status amount createdAt debitAccount creditAccount"
+            )
+            .sort({ createdAt: -1 })
+            .limit(200)
+            .lean();
+
+        return res.status(200).json({ entries });
+    } catch (error) {
+        console.error("System ledger lookup failed:", error);
+        return res.status(500).json({
+            Message: "Unable to retrieve system funding ledger"
+        });
+    }
+}
+
+module.exports = {
+    createTransaction,
+    createInitialSystemTransaction,
+    getTransactionHistory,
+    getLedgerEntries,
+    getSystemCustomerAccounts,
+    getSystemLedgerEntries
+};

@@ -92,7 +92,7 @@ async function authenticateRequest(
 
         // 5. System-only routes reject ordinary customers.
         if (
-            requireSystemUser &&
+            requireSystemUser === true &&
             user.systemUser !== true
         ) {
             return res.status(403).json({
@@ -103,7 +103,7 @@ async function authenticateRequest(
 
         // 6. Customer routes reject system users.
         if (
-            !requireSystemUser &&
+            requireSystemUser === false &&
             user.systemUser === true
         ) {
             return res.status(403).json({
@@ -152,4 +152,20 @@ async function systemUserMiddleware(req, res, next) {
     );
 }
 
-module.exports = { authMiddleware, systemUserMiddleware };
+/**
+ * Middleware for endpoints shared by customer and system-user sessions.
+ */
+async function sessionAuthMiddleware(req, res, next) {
+    return authenticateRequest(
+        req,
+        res,
+        next,
+        null
+    );
+}
+
+module.exports = {
+    authMiddleware,
+    systemUserMiddleware,
+    sessionAuthMiddleware
+};

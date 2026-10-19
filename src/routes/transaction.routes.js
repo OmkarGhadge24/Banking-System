@@ -16,6 +16,18 @@ router.post("/", authMiddleware.authMiddleware, transactionController.createTran
 */
 router.post("/system/initial", authMiddleware.systemUserMiddleware, transactionController.createInitialSystemTransaction)
 
+router.get(
+    "/system/accounts",
+    authMiddleware.systemUserMiddleware,
+    transactionController.getSystemCustomerAccounts
+);
+
+router.get(
+    "/system/ledger",
+    authMiddleware.systemUserMiddleware,
+    transactionController.getSystemLedgerEntries
+);
+
 
 /** 
  * - Authenticated transaction history
