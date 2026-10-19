@@ -268,7 +268,7 @@ async function createTransaction(req, res) {
                     transaction: transaction._id
                 }
             ],
-            { session }
+            { session, ordered: true }
         );
 
         transaction.status = "SUCCESS";
@@ -474,7 +474,7 @@ async function createInitialSystemTransaction(req, res) {
                     transaction: transaction._id
                 }
             ],
-            { session }
+            { session, ordered: true }
         );
 
         transaction.status = "SUCCESS";
